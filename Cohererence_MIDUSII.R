@@ -27,6 +27,31 @@ library(pbkrtest)
 library(boot)
 source("~/Desktop/Statistics710/homework/indirectMLM.R")
 
+#### Functions ####
+# APA writeUp function by Adrienne R. Wood
+writeUp = function(myModel) {
+  mod = myModel
+  coeffs = modelSummary(mod,t=F, Print = F)
+  effects = modelEffectSizes(mod, Print = F)
+  myVars = c() # Makes a vector of your predictor variables' names
+  for (i in attributes(mod$terms)["term.labels"]) {
+    myVars = append(myVars,i)
+  }
+  fstart = (length(myVars)+1)*2+1 # specifies the location in the modelSummary and modelEffect sizes output where our Fs and ps will be found
+  pstart = (length(myVars)+1)*3+1
+  v = 1
+  for (variable in myVars) {
+    fstart = fstart+1
+    pstart = pstart+1
+    v = v+1 ## SLS edit (also below for b)
+    thisOutput = paste0(variable,": b = ",round(mod$coefficients[v],3),", F(1, ",mod$df.residual,") = ",
+                        round(coeffs$coefficients[fstart],3),", p = ", round(coeffs$coefficients[pstart],3),
+                        ", partial η² = ", round(effects$Effects[fstart],3))
+    thisOutput = gsub("p = 0,", "p < .001,", thisOutput)
+    print(thisOutput)
+  }
+}
+
 #### Read in Data ####
 # Project 4 (biomarker)
 P4file = paste(myddir,"/ICPSR_29282_m2p4/DS0001/29282-0001-Data.rda", sep='')
@@ -73,9 +98,9 @@ ecg_QO = c('B4VBEQn', 'B4VMEQn', 'B4VR1EQn', 'B4VSEQn', 'B4VR2EQn', 'B4VUEQn') #
 ecg_Q = c('ecgQ1', 'ecgQM', 'ecgQ3', 'ecgQS', 'ecgQ5', 'ecgQ6') # new names 
 
 ## Miscellaneous variables to rename
-miscO = c('B1PGENDER', 'B1PAGE_M2', 'B4QTA_AX', 'B4QCESD', 'B4H1I', 'B4PBMI')
+miscO = c('B1PGENDER', 'B1PAGE_M2', 'B4QTA_AX', 'B4QCESD', 'B4H1I', 'B4PBMI', 'B4BIL6', 'B4BCRP')
 #d[miscO]
-misc = c('gender', 'age', 'P4_STAItrait', 'P4_CESD', 'P4_diabetes', 'P4_BMI')
+misc = c('gender', 'age', 'P4_STAItrait', 'P4_CESD', 'P4_diabetes', 'P4_BMI', 'IL6', 'CRP')
 
 ## Remove whitespace from task variable values
 dfP4$B4VTASK1str = varRecode(dfP4$B4VTASK1, c("STROOP    ", "MATH      ", "INAPPLIC  ", "PASAT     "), c('STROOP', 'MATH', 'INAPPLIC', 'PASAT'))
@@ -121,7 +146,7 @@ count(is.na(dfP4$hr5)) # 179 - 136 = 43
 count(is.na(dfP4$hr6)) # 194 - 151 = 43
 
 # Subset variables I want into a separate dataframe (dfP4ss)
-P4cols = c("M2ID", "M2FAMNUM", "SAMPLMAJ", 'B4VTASK1str', misc, stressSR, ecg_HR, ecg_Q,'B4BIL6', 'B4BCRP')
+P4cols = c("M2ID", "M2FAMNUM", "SAMPLMAJ", 'B4VTASK1str', misc, stressSR, ecg_HR, ecg_Q)
 names(dfP4[P4cols])
 dfP4ss = dfP4[P4cols]
 
@@ -173,7 +198,6 @@ ecg_HRn = c('hr1', 'hr2', 'hr3', 'hr4', 'hr5', 'hr6')
 pdf(paste(adir,"/coherence_hr_subjplots_",today,".pdf",sep=''))
 # For each subject
 for (s in dfP4ss2$M2ID) {
-  s = 10231
   print(s)
   # Subset and transpose subject's stress SRs and heart rate
   SUBstress = t(dfP4ss2[stressSR[1:5]][dfP4ss2$M2ID == s,])
@@ -240,11 +264,12 @@ hist(dfP4ss2$coherence_as_r5, main='Coherence - complete data only', xlab='Coher
 PWB2O = c('B1SPWBA2', 'B1SPWBE2', 'B1SPWBG2', 'B1SPWBR2', 'B1SPWBU2', 'B1SPWBS2') # old names
 PWB2 = c('autonomy2', 'envMast2', 'persGrow2', 'posRela2', 'purpLife2', 'selfAcce2') # new names
 
-COPEO = c('B1SEMCOP', 'B1SPRCOP', 'B1SDENIA', 'B1SVENT', 'B1SDISEN', 'B1SREINT', 'B1SACTIV', 'B1SPLAN') # old names
+COPEO = c('COPEem', 'COPEprob', 'B1SDENIA', 'B1SVENT', 'B1SDISEN', 'B1SREINT', 'B1SACTIV', 'B1SPLAN') # old names
 COPE = c('COPEem', 'COPEprob', 'COPE_denial', 'COPE_vent', 'COPE_disengage', 'COPE_posReGrow', 'COPE_active', 'COPE_plan') # new names
 
 # Rename columns
 setnames(dfP1, old=PWB2O, new=PWB2)
+setnames(dfP1, old=COPEO, new=COPE)
 length(dfP1$M2ID)
 
 ## Composite PWB
@@ -255,7 +280,7 @@ P1miscO = c('B1PBYEAR','B1PRSEX','pwb2')
 P1misc = c('birth_year','P1_sex','pwb2')
 setnames(dfP1, old=P1miscO, new=P1misc)
 
-P1cols = c("M2ID", P1misc, PWB2)
+P1cols = c("M2ID", P1misc, PWB2, COPE)
 # Subset P1 data
 dfP1ss = dfP1[P1cols]
 
@@ -277,9 +302,8 @@ df = dfTemp
 # because data tables link to all versions of table
 dt = df
 # All variables except stress[1-6], hr[1-6], ecgQ[1-6]
-dt$stress1
 
-varsid = c(names(dt[1:10]), names(dt[29:40]))
+varsid = c(names(dt[1:12]), names(dt[31:49]))
 dfLTemp = melt.data.table(setDT(dt),
                        id.vars = varsid, # ID variables - all the variables to keep but not split apart on
                        measure = patterns("^stress", "^hr", "^ecgQ"),
@@ -290,7 +314,6 @@ setnames(dfLTemp, old=OLD, new=NEW)
 # convert to beloved data.frame
 dfLTemp = data.frame(dfLTemp)
 names(dfLTemp)
-View(dfLTemp)
 
 #### Remove orthostatic stress from long format df ####
 dfLnoO = dfLTemp[dfLTemp$timepoint != 6,] 
@@ -330,39 +353,251 @@ dfL = read.csv(fpathL)
 #######################################
 ####   LMER/LONG format analysis   #### 
 #######################################
-
-#### Cluster Mean Center ####
-#varDescribeBy(dfL$stress, dfL$timepoint)
+#### Prep variables ####
+## Cluster Mean Center ##
 dfL$stress_CMC = dfL$stress - ave(dfL$stress, dfL$M2ID, na.rm=T)
-
-#varDescribeBy(dfL$hr, dfL$timepoint)
 dfL$hr_CMC = dfL$hr - ave(dfL$hr, dfL$M2ID, na.rm=T)
 
-#varDescribeBy(dfL$stress_CMC, dfL$timepoint)
-#varDescribeBy(dfL$hr_CMC, dfL$timepoint)
-#varDescribe(dfL$timepoint)
-
+## Mean Center ##
+dfL$age_C = dfL$age - mean(dfL$age, na.rm=T)
 dfL$pwb2_C = dfL$pwb2 - mean(dfL$pwb2, na.rm=T)
 dfL$P4_CESD_C = dfL$P4_CESD- mean(dfL$P4_CESD, na.rm=T)
 dfL$P4_STAItrait_C = dfL$P4_STAItrait - mean(dfL$P4_STAItrait, na.rm=T)
-dfL$P5_ERQ_s_C = dfL$P5_ERQ_s - mean(dfL$P5_ERQ_s, na.rm=T)
-dfL$B4BIL6_C = dfL$B4BIL6 - mean(dfL$B4BIL6, na.rm=T)
-dfL$B4BCRP_C = dfL$B4BCRP - mean(dfL$B4BCRP, na.rm=T)
-dfL$B1SPRCOP_C = dfL$B1SPRCOP - mean(dfL$B1SPRCOP, na.rm=T)
-dfL$B1SEMCOP_C = dfL$B1SEMCOP - mean(dfL$B1SEMCOP, na.rm=T)
-dfL$coherence_slope_C = dfL$coherence_slope - mean(dfL$coherence_slope, na.rm=T)
-dfL$coherence_slopeNoAge_C = dfL$coherence_slopeNoAge - mean(dfL$coherence_slopeNoAge, na.rm=T)
+dfL$IL6_C = dfL$IL6 - mean(dfL$IL6, na.rm=T)
+dfL$CRP_C = dfL$CRP - mean(dfL$CRP, na.rm=T)
+dfL$COPEprob_C = dfL$COPEprob - mean(dfL$COPEprob, na.rm=T)
+dfL$COPEem_C = dfL$COPEem - mean(dfL$COPEem, na.rm=T)
 
-# Log transformed inflammatory markers
-dfL$B4BIL6_T = log2(dfL$B4BIL6)
-dfL$B4BCRP_T = log(dfL$B4BCRP, base=10)
-dfL$B4BIL6_T_C = dfL$B4BIL6_T - mean(dfL$B4BIL6_T, na.rm=T)
-dfL$B4BCRP_T_C = dfL$B4BCRP_T - mean(dfL$B4BCRP_T, na.rm=T)
-
-dfL$age_C = dfL$age - mean(dfL$age, na.rm=T)
+## Re-code ##
 dfL$gender_C = varRecode(dfL$gender, c('(1) MALE', '(2) FEMALE'), c(-.5,.5))
 
+## Log transform inflammatory markers
+dfL$IL6_T = log2(dfL$IL6)
+hist(dfL$IL6_T)
+dfL$CRP_T = log(dfL$CRP, base=10)
+hist(dfL$CRP_T)
+dfL$IL6_T_C = dfL$IL6_T - mean(dfL$IL6_T, na.rm=T)
+dfL$CRP_T_C = dfL$CRP_T - mean(dfL$CRP_T, na.rm=T)
+
 names(dfL)
+
+#### Extract slopes from LMEM ####
+lmerS = lmer(hr ~ stress_CMC + (1+ stress_CMC|M2ID), data=dfL)
+Anova(lmerS, type=3, test="F")
+modelSummary(lmerS)
+# The slopes
+slopes = coef(lmerS)$M2ID
+names(slopes)
+slopes
+dfSlope = data.frame(slopes)
+names(dfSlope)
+dfSlope$stress_CMC
+rownames(dfSlope)
+
+dfSlope2 = data.frame(M2ID = row.names(dfSlope), dfSlope$stress_CMC)
+dfSlope2
+names(dfSlope2)[names(dfSlope2) == 'dfSlope.stress_CMC'] = 'coherence_slope'
+dfL = merge.data.frame(dfL, dfSlope2, by='M2ID', all=TRUE)
+
+#### Save centered/transformed + subejct slopes data #### 
+today = '20180116'
+fnameL = paste("cohLong_",today,".csv",sep='')
+fpathL = paste(ddir,"/",fnameL, sep='')
+write.csv(dfL, file=fpathL)
+
+#### Plot individual subject slopes ####
+dfL$stressMC = dfL$stress - ave(dfL$stress, dfL$M2ID)
+dfL$hrM = ave(dfL$stress, dfL$M2ID)
+
+ggplot(dfL, aes(stress, hr, color=as.factor(M2ID)))+
+  geom_smooth(aes(group=as.factor(M2ID)),method="lm",se=F,size=.1, alpha=.6, position="jitter")+
+  xlim(c(0,11))+
+  theme_bw() +
+  theme(panel.grid.minor = element_blank(), axis.text=element_text(size=14), axis.title=element_text(size=24)) +
+  labs(x="Self-Reported Stress", y="Heart Rate")+
+  theme(legend.position="none")
+
+
+#### LMER TESTS ####
+
+#### Stress & heart rate ####
+lmerM = lmer(hr ~ stress_CMC + age_C + (1 + stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+# b = .928, F(1, 731.3) = 610.2, p = .0001
+
+#### Age ####
+lmerM = lmer(hr ~ stress_CMC * age_C + (1+ stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+# b = -0.010, F(1, 745.2) = 9.458, p = .002
+
+
+#### Gender ####
+lmerM = lmer(hr ~ stress_CMC * gender_C + (1+ stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F") # NS
+modelSummary(lmerM)
+
+
+#### PWB ####
+lmerM = lmer(hr ~ stress_CMC * pwb2_C + age_C + (1+ stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+# b = .003, F(1, 729) = 9.969e+00, p = .001657
+
+#### Depression ####
+lmerM = lmer(hr ~ stress_CMC * P4_CESD_C + age_C + (1 + stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+
+
+#### Anxiety ####
+lmerM = lmer(hr ~ stress_CMC * P4_STAItrait_C + age_C + (1 + stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+
+
+#### IL6 ####
+lmerM = lmer(hr ~ stress_CMC * IL6_T_C + age_C + (1 + stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+
+
+#### CRP ####
+varDescribe(dfL$CRP_T_C)
+hist(dfL$CRP_T_C)
+lmerM = lmer(hr ~ stress_CMC * B4BCRP_T_C + age_C + (1 + stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+# b = -0.130, F(1, 735.9) = 2.954, p = .086
+
+
+#### Emotion-focused coping ####
+lmerM = lmer(hr ~ COPEem_C + age_C + (1 + stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+
+
+#### Problem-focused coping ####
+lmerM = lmer(hr ~ COPEprob_C + age_C + (1 + stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+
+
+
+#### MEDIATION -LMEM ####
+### 2. Coherence -> COPE 
+## Problem-focused coping
+lmerM = lmer(hr ~ stress_CMC * COPEprob_C + age_C + (1+ stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+# b = .009, F(1, 721.56) = 1.826, p = .177
+
+# Slope extracted
+lmerM = lmer(COPEprob ~ coherence_slopeNoAge_C + age_C + (1|M2FAMNUM), data=df)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+# b = .72, F(1,870.4) = 3.24, p = .072
+
+## Emotion-focused coping
+lmerM = lmer(hr ~ stress_CMC * COPEem_C + age_C + (1+ stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+# b = -0.033, F(1, 735.51) = 22.204, p < .0001
+
+## Slope extracted
+lmerM = lmer(COPEem ~ coherence_slopeNoAge_C + age_C + (1|M2FAMNUM), data=df)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+# b = -1.61, F(1, 878.38) = 20.84, p < .0001
+
+
+#### mLMEM. Depression ####
+lmerM1 = lmer(COPEem ~ coherence_slopeNoAge_C + age_C + (1|M2FAMNUM), data=df[df$P4_CESD != 'NA',])
+Anova(lmerM1, type=3, test="F")
+modelSummary(lmerM1)
+
+lmerM2 = lmer(P4_CESD ~ coherence_slopeNoAge_C + age_C + (1|M2FAMNUM), data=df[df$COPEem_C != 'NA',])
+Anova(lmerM2, type=3, test="F")
+modelSummary(lmerM2)
+
+lmerM3 = lmer(P4_CESD ~ coherence_slopeNoAge_C + COPEem_C + age_C + (1|M2FAMNUM), data=df)
+Anova(lmerM3, type=3, test="F")
+modelSummary(lmerM3)
+# coherence: b = -1.75, F(1,874.98) = 12.278, p = .0005
+# emotion coping: b = .39, F(1, 874.76) = 68.27, p < .0001
+
+med = mediate(lmerM2, lmerM3, treat = "coherence_slopeNoAge_C", mediator = "COPEem_C")
+summary(med)
+
+
+
+
+#### mLMEM. Anxiety ####
+lmerM1 = lmer(COPEem ~ coherence_slopeNoAge_C + age_C + (1|M2FAMNUM), data=df[df$P4_STAItrait != 'NA',])
+Anova(lmerM1, type=3, test="F")
+modelSummary(lmerM1)
+
+lmerM2 = lmer(P4_STAItrait ~ coherence_slopeNoAge_C + age_C + (1|M2FAMNUM), data=df[df$COPEem != 'NA',])
+Anova(lmerM2, type=3, test="F")
+modelSummary(lmerM2)
+
+lmerM3 = lmer(P4_STAItrait ~ coherence_slopeNoAge_C + COPEem_C + age_C + (1|M2FAMNUM), data=df)
+Anova(lmerM3, type=3, test="F")
+modelSummary(lmerM3)
+# coherence: b = -1.66, F(1, 874.60) = 9.51, p = .002
+# emotion coping: b = .69, F(1, 874.86) = 175.65, p < .0001
+
+# Mediation
+med = mediate(lmerM2, lmerM3, treat = "coherence_slopeNoAge_C", mediator = "COPEem_C")
+summary(med)
+
+#### mLMEM. PWB #### 
+lmerM1 = lmer(COPEem ~ coherence_slopeNoAge_C + age_C + (1|M2FAMNUM), data=df[df$pwb2 != 'NA',])
+Anova(lmerM1, type=3, test="F")
+modelSummary(lmerM1)
+
+# 1. Coherence -> PWB
+lmerM2 = lmer(pwb2 ~ coherence_slopeNoAge_C + age_C + (1|M2FAMNUM), data=df[df$COPEem != 'NA',])
+Anova(lmerM2, type=3, test="F")
+modelSummary(lmerM2)
+hist(dfL$coherence_slope)
+# 3. COPE + Coherence -> PWB
+lmerM3 = lmer(pwb2 ~ coherence_slopeNoAge_C + COPEem_C + age_C + (1|M2FAMNUM), data=df)
+Anova(lmerM3, type=3, test="F")
+modelSummary(lmerM3)
+# coherence: b = 5.31, F(1, 877.98) =  6.31, p = .012
+# emotion coping: b = -2.51, F(1, 877.95) = 158.09, p < .0001
+
+# Mediation
+med = mediate(lmerM2, lmerM3, treat = "coherence_slopeNoAge_C", mediator = "COPEem_C")
+summary(med)
+
+#### mLMEM. IL 6 ####
+lmerM1 = lmer(COPEem ~ coherence_slopeNoAge_C + age_C + (1|M2FAMNUM), data=df[df$B4BIL6 != 'NA',])
+Anova(lmerM1, type=3, test="F")
+modelSummary(lmerM1)
+
+lmerM2 = lmer(IL6 ~ coherence_slopeNoAge_C + age_C + (1|M2FAMNUM), data=df[df$COPEem_C != 'NA',])
+Anova(lmerM2, type=3, test="F")
+modelSummary(lmerM2)
+
+lmerM3 = lmer(IL6 ~ coherence_slopeNoAge_C + COPEem_C + age_C + (1|M2FAMNUM), data=df)
+Anova(lmerM3, type=3, test="F")
+modelSummary(lmerM3)
+# coherence: b = -0.45, F(1, 857.34) =  6.02, p = .014
+# emotion coping: b = .04, F(1, 853.81) = 5.82, p = .016
+
+# Mediation
+med = mediate(lmerM2, lmerM3, treat = "coherence_slope_C", mediator = "COPEem_C")
+summary(med)
+
+
+
+
+
+
+
 
 
 
