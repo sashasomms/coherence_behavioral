@@ -138,12 +138,17 @@ dfP4['hr5'][ (dfP4['ecgQ5'] != 1) & (dfP4['ecgQ5'] != 2) ] = NA
 dfP4['hr6'][ (dfP4['ecgQ6'] != 1) & (dfP4['ecgQ6'] != 2) ] = NA
 
 # How many removed? 
-count(is.na(dfP4$hr1)) # 144 - 102 = 42
+count(is.na(dfP4$hr1)) # 149 - 102 = 47
 count(is.na(dfP4$hrM)) # 225 - 159 = 66
 count(is.na(dfP4$hr3)) # 172 - 130 = 42
 count(is.na(dfP4$hrS)) # 218 - 142 = 76
 count(is.na(dfP4$hr5)) # 179 - 136 = 43
 count(is.na(dfP4$hr6)) # 194 - 151 = 43
+
+#### Clean diabetes data ####
+dfP4$P4_diabetes = varRecode(dfP4$P4_diabetes, c("(1) YES", "(2) NO", "(3) BORDERLINE"), c(1, 3, 2))
+dfP4$P4_diabetes = as.numeric(dfP4$P4_diabetes)
+varDescribe(dfP4$P4_diabetes)
 
 # Subset variables I want into a separate dataframe (dfP4ss)
 P4cols = c("M2ID", "M2FAMNUM", "SAMPLMAJ", 'B4VTASK1str', misc, stressSR, ecg_HR, ecg_Q)
@@ -264,7 +269,7 @@ hist(dfP4ss2$coherence_as_r5, main='Coherence - complete data only', xlab='Coher
 PWB2O = c('B1SPWBA2', 'B1SPWBE2', 'B1SPWBG2', 'B1SPWBR2', 'B1SPWBU2', 'B1SPWBS2') # old names
 PWB2 = c('autonomy2', 'envMast2', 'persGrow2', 'posRela2', 'purpLife2', 'selfAcce2') # new names
 
-COPEO = c('COPEem', 'COPEprob', 'B1SDENIA', 'B1SVENT', 'B1SDISEN', 'B1SREINT', 'B1SACTIV', 'B1SPLAN') # old names
+COPEO = c('B1SEMCOP', 'B1SPRCOP', 'B1SDENIA', 'B1SVENT', 'B1SDISEN', 'B1SREINT', 'B1SACTIV', 'B1SPLAN') # old names
 COPE = c('COPEem', 'COPEprob', 'COPE_denial', 'COPE_vent', 'COPE_disengage', 'COPE_posReGrow', 'COPE_active', 'COPE_plan') # new names
 
 # Rename columns
@@ -276,8 +281,8 @@ length(dfP1$M2ID)
 dfP1$pwb2 = varScore(dfP1, Forward = PWB2, MaxMiss = .0)
 
 # Miscellaneous
-P1miscO = c('B1PBYEAR','B1PRSEX','pwb2')
-P1misc = c('birth_year','P1_sex','pwb2')
+P1miscO = c('B1PBYEAR','B1PRSEX','B1PF7A', 'pwb2')
+P1misc = c('birth_year','P1_sex','P1_race', 'pwb2')
 setnames(dfP1, old=P1miscO, new=P1misc)
 
 P1cols = c("M2ID", P1misc, PWB2, COPE)
@@ -303,7 +308,7 @@ df = dfTemp
 dt = df
 # All variables except stress[1-6], hr[1-6], ecgQ[1-6]
 
-varsid = c(names(dt[1:12]), names(dt[31:49]))
+varsid = c(names(dt[1:12]), names(dt[31:50]))
 dfLTemp = melt.data.table(setDT(dt),
                        id.vars = varsid, # ID variables - all the variables to keep but not split apart on
                        measure = patterns("^stress", "^hr", "^ecgQ"),
@@ -315,17 +320,76 @@ setnames(dfLTemp, old=OLD, new=NEW)
 dfLTemp = data.frame(dfLTemp)
 names(dfLTemp)
 
-#### Remove orthostatic stress from long format df ####
+#### Remove orthostatic stress timepoint from long format df ####
 dfLnoO = dfLTemp[dfLTemp$timepoint != 6,] 
 
 dfL = dfLnoO
+
+#### 'Complete' variable: Find subjects with only all 5 timepoints of stress SRs and HR data ####
+completeSubjs = NA
+for ( s in unique(dfL$M2ID) ) {
+  #print(s)
+  # Subset and transpose subject's stress SRs and heart rate
+  SUBstress = dfL$stress[dfL$M2ID == s]
+  SUBhr = dfL$hr[dfL$M2ID == s]
+  # Put subjects stress and heart rate into their own dataframe
+  SUBdf = data.frame(SUBstress, SUBhr)
+  names(SUBdf)[1] = "stress"
+  names(SUBdf)[2] = "hr"
+  # Count number of NAs in stress self-reports
+  cS = count((is.na(SUBdf$stress)))
+  stressNotNA = as.numeric(cS[cS$x == 'FALSE',][2])
+  
+  # Count number of NAs in heart rate
+  cH = count((is.na(SUBdf$hr)))
+  hrNotNA = as.numeric(cH[cH$x == 'FALSE',][2])
+  
+  if ( (!is.na(hrNotNA)) & (!is.na(stressNotNA)) ) {
+    # Compute correlations only for subjects with all 5 timepoints 
+    if ( (hrNotNA == 5) & (stressNotNA == 5) ) {
+      print(s)
+      completeSubjs = c(completeSubjs, s)
+      dfL$complete[dfL$M2ID == s] = 1
+    }
+    if ( (hrNotNA != 5) & (stressNotNA != 5) ) {
+      dfL$complete[dfL$M2ID == s] = 0
+    }
+    
+  }
+  
+  rm(cS, cH, stressNotNA, hrNotNA) # clear variables before looping for next subject
+}
+
+length(completeSubjs)
+
+##################################
+#### Extract slopes from LMEM ####
+##################################
+# cluster mean-center
+dfL$stress_CMC = dfL$stress - ave(dfL$stress, dfL$M2ID, na.rm=T)
+lmerS = lmer(hr ~ stress_CMC + (1+ stress_CMC|M2ID), data=dfL)
+Anova(lmerS, type=3, test="F")
+modelSummary(lmerS)
+# The slopes
+slopes = coef(lmerS)$M2ID
+names(slopes)
+slopes
+dfSlope = data.frame(slopes)
+names(dfSlope)
+dfSlope$stress_CMC
+rownames(dfSlope)
+
+dfSlope2 = data.frame(M2ID = row.names(dfSlope), dfSlope$stress_CMC)
+dfSlope2
+names(dfSlope2)[names(dfSlope2) == 'dfSlope.stress_CMC'] = 'coherence_slope'
+dfL = merge.data.frame(dfL, dfSlope2, by='M2ID', all=TRUE)
 
 
 ################################
 #### Write out my data file #### 
 ################################
 
-today='20180115'
+today='20180123'
 
 # Wide format
 fnameW = paste("coh_",today,".csv",sep='')
@@ -342,17 +406,60 @@ fpathL = paste(myddir,"/",fnameL, sep='')
 write.csv(dfL, file=fpathL)
 
 
+
 #### Read in data in future without all that trouble #### 
 df = read.csv(fpathW)
 dfL = read.csv(fpathL)
+
+
+
 
 #################
 #### ANALYZE #### 
 #################
 
-#######################################
-####   LMER/LONG format analysis   #### 
-#######################################
+#### Plot individual subject slopes ####
+dfL$stressMC = dfL$stress - ave(dfL$stress, dfL$M2ID)
+dfL$hrM = ave(dfL$stress, dfL$M2ID)
+
+ggplot(dfL, aes(stress, hr, color=as.factor(M2ID)))+
+  geom_smooth(aes(group=as.factor(M2ID)),method="lm",se=F,size=.1, alpha=.6, position="jitter")+
+  xlim(c(0,11))+
+  theme_bw() +
+  theme(panel.grid.minor = element_blank(), axis.text=element_text(size=14), axis.title=element_text(size=24)) +
+  labs(x="Self-Reported Stress", y="Heart Rate")+
+  theme(legend.position="none")
+
+
+
+
+
+###########################
+####   LMER analysis   #### 
+###########################
+
+#### Save a separate file for analysis - excluding the many survey people without coherence data
+dfLs = dfL[!is.na(dfL$coherence_slope),]
+length(unique(dfLs$M2ID))
+varDescribeBy(dfLs$coherence_slope, dfLs$SAMPLMAJ)
+View(dfLs)
+
+dfLc = dfL[dfL$complete == 1,]
+length(unique(dfLc$M2ID))
+varDescribeBy(dfL$M2ID, dfL$stress)
+
+
+today = '20180116'
+fnameL = paste("cohLong_",today,".csv",sep='')
+fpathL = paste(ddir,"/",fnameL, sep='')
+write.csv(dfL, file=fpathL)
+
+#### Demographics table ####
+varDescribeBy(dfLs$M2ID)
+# Move long data back to wide format
+
+
+
 #### Prep variables ####
 ## Cluster Mean Center ##
 dfL$stress_CMC = dfL$stress - ave(dfL$stress, dfL$M2ID, na.rm=T)
@@ -381,41 +488,7 @@ dfL$CRP_T_C = dfL$CRP_T - mean(dfL$CRP_T, na.rm=T)
 
 names(dfL)
 
-#### Extract slopes from LMEM ####
-lmerS = lmer(hr ~ stress_CMC + (1+ stress_CMC|M2ID), data=dfL)
-Anova(lmerS, type=3, test="F")
-modelSummary(lmerS)
-# The slopes
-slopes = coef(lmerS)$M2ID
-names(slopes)
-slopes
-dfSlope = data.frame(slopes)
-names(dfSlope)
-dfSlope$stress_CMC
-rownames(dfSlope)
 
-dfSlope2 = data.frame(M2ID = row.names(dfSlope), dfSlope$stress_CMC)
-dfSlope2
-names(dfSlope2)[names(dfSlope2) == 'dfSlope.stress_CMC'] = 'coherence_slope'
-dfL = merge.data.frame(dfL, dfSlope2, by='M2ID', all=TRUE)
-
-#### Save centered/transformed + subejct slopes data #### 
-today = '20180116'
-fnameL = paste("cohLong_",today,".csv",sep='')
-fpathL = paste(ddir,"/",fnameL, sep='')
-write.csv(dfL, file=fpathL)
-
-#### Plot individual subject slopes ####
-dfL$stressMC = dfL$stress - ave(dfL$stress, dfL$M2ID)
-dfL$hrM = ave(dfL$stress, dfL$M2ID)
-
-ggplot(dfL, aes(stress, hr, color=as.factor(M2ID)))+
-  geom_smooth(aes(group=as.factor(M2ID)),method="lm",se=F,size=.1, alpha=.6, position="jitter")+
-  xlim(c(0,11))+
-  theme_bw() +
-  theme(panel.grid.minor = element_blank(), axis.text=element_text(size=14), axis.title=element_text(size=24)) +
-  labs(x="Self-Reported Stress", y="Heart Rate")+
-  theme(legend.position="none")
 
 
 #### LMER TESTS ####
@@ -466,10 +539,27 @@ modelSummary(lmerM)
 #### CRP ####
 varDescribe(dfL$CRP_T_C)
 hist(dfL$CRP_T_C)
-lmerM = lmer(hr ~ stress_CMC * B4BCRP_T_C + age_C + (1 + stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+lmerM = lmer(hr ~ stress_CMC * CRP_T_C + age_C + (1 + stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
 Anova(lmerM, type=3, test="F")
 modelSummary(lmerM)
 # b = -0.130, F(1, 735.9) = 2.954, p = .086
+
+#### Diabetes ####
+dfL$P4_diabetes = as.numeric(dfL$P4_diabetes)
+varDescribe(dfL$P4_diabetes)
+hist(dfL$P4_diabetes)
+lmerM = lmer(hr ~ stress_CMC * P4_diabetes + age_C + (1 + stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+
+
+#### BMI ####
+varDescribe(dfL$P4_BMI)
+hist(dfL$P4_BMI)
+lmerM = lmer(hr ~ stress_CMC * P4_BMI + age_C + (1 + stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+
 
 
 #### Emotion-focused coping ####
