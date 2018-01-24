@@ -13,6 +13,7 @@ dir = '~/Desktop/UWMadison/MIDUS'
 ddir = paste(dir, '/data', sep='')
 adir = paste(dir, '/analysis', sep='')
 # Directory with raw data downloaded from http://www.icpsr.umich.edu/icpsrweb/ICPSR/studies/29282 and /04652
+# And from http://midus.colectica.org/ for MIDUS 2 Milwaukee subsample 
 myddir = '/Volumes/sommerfeldt/fyp/data/publicMIDUS'
 # Set working directory 
 setwd(ddir)
@@ -27,30 +28,6 @@ library(pbkrtest)
 library(boot)
 source("~/Desktop/Statistics710/homework/indirectMLM.R")
 
-#### Functions ####
-# APA writeUp function by Adrienne R. Wood
-writeUp = function(myModel) {
-  mod = myModel
-  coeffs = modelSummary(mod,t=F, Print = F)
-  effects = modelEffectSizes(mod, Print = F)
-  myVars = c() # Makes a vector of your predictor variables' names
-  for (i in attributes(mod$terms)["term.labels"]) {
-    myVars = append(myVars,i)
-  }
-  fstart = (length(myVars)+1)*2+1 # specifies the location in the modelSummary and modelEffect sizes output where our Fs and ps will be found
-  pstart = (length(myVars)+1)*3+1
-  v = 1
-  for (variable in myVars) {
-    fstart = fstart+1
-    pstart = pstart+1
-    v = v+1 ## SLS edit (also below for b)
-    thisOutput = paste0(variable,": b = ",round(mod$coefficients[v],3),", F(1, ",mod$df.residual,") = ",
-                        round(coeffs$coefficients[fstart],3),", p = ", round(coeffs$coefficients[pstart],3),
-                        ", partial η² = ", round(effects$Effects[fstart],3))
-    thisOutput = gsub("p = 0,", "p < .001,", thisOutput)
-    print(thisOutput)
-  }
-}
 
 #### Read in Data ####
 # Project 4 (biomarker)
@@ -60,6 +37,30 @@ dfP4 = da29282.0001
 names(dfP4)
 
 # Project 1 (surveys)
+P1file = paste(myddir, '/ICPSR_04652_m2/DS0001/04652-0001-Data.sav', sep='')
+dfP1 = read.spss(P1file, to.data.frame=TRUE)
+names(dfP1)
+summary(dfP1$SAMPLMAJ)
+length(dfP1$M2ID)
+
+# Project 1 (surveys) for Milwaukee subsample (also zygotic category from M1)
+P1Mfile = paste(myddir, '/mke.sav', sep='')
+#dfP1M = read.csv(P1Mfile, header=TRUE)
+dfP1M = read.spss(P1Mfile, to.data.frame=TRUE)
+names(dfP1M)
+summary(dfP1M$SAMPLMAJ)
+length(dfP1M$M2ID)
+varDescribe(dfP1M)
+
+
+# Diabetes
+P1file = paste(myddir, '/ICPSR_04652_m2/DS0001/04652-0001-Data.sav', sep='')
+dfP1 = read.spss(P1file, to.data.frame=TRUE)
+names(dfP1)
+summary(dfP1$SAMPLMAJ)
+length(dfP1$M2ID)
+
+# Faces
 P1file = paste(myddir, '/ICPSR_04652_m2/DS0001/04652-0001-Data.sav', sep='')
 dfP1 = read.spss(P1file, to.data.frame=TRUE)
 names(dfP1)
@@ -98,9 +99,10 @@ ecg_QO = c('B4VBEQn', 'B4VMEQn', 'B4VR1EQn', 'B4VSEQn', 'B4VR2EQn', 'B4VUEQn') #
 ecg_Q = c('ecgQ1', 'ecgQM', 'ecgQ3', 'ecgQS', 'ecgQ5', 'ecgQ6') # new names 
 
 ## Miscellaneous variables to rename
-miscO = c('B1PGENDER', 'B1PAGE_M2', 'B4QTA_AX', 'B4QCESD', 'B4H1I', 'B4PBMI', 'B4BIL6', 'B4BCRP')
+miscO = c('B1PGENDER', 'B1PAGE_M2', 'B4ZAGE', 'B4ZB1PLG', 'B4ZB1SLG', 'B4ZB1CLG', 'B4QTA_AX', 'B4QCESD', 'B4H1I', 'B4PBMI', 'B4BIL6', 'B4BCRP')
 #d[miscO]
-misc = c('gender', 'age', 'P4_STAItrait', 'P4_CESD', 'P4_diabetes', 'P4_BMI', 'IL6', 'CRP')
+misc = c('gender', 'P1_PIage', 'P4_age', 'months_P1PI_to_P4', 'months_P1SAQ_to_P4', 'months_P1cog_to_P4', 'P4_STAItrait', 'P4_CESD', 'P4_diabetes', 'P4_BMI', 'IL6', 'CRP')
+
 
 ## Remove whitespace from task variable values
 dfP4$B4VTASK1str = varRecode(dfP4$B4VTASK1, c("STROOP    ", "MATH      ", "INAPPLIC  ", "PASAT     "), c('STROOP', 'MATH', 'INAPPLIC', 'PASAT'))
@@ -111,6 +113,8 @@ setnames(dfP4, old=ecg_HRO, new=ecg_HR)
 setnames(dfP4, old=ecg_QO, new=ecg_Q)
 setnames(dfP4, old=miscO, new=misc)
 sort(names(dfP4))
+
+sort(names(dfP4))[2400:2600]
 
 # Check some quality ratings before removing any bad data
 varDescribeBy(dfP4$hr1, dfP4$ecgQ1) # 1 = 742, 2 = 364, 3 = 47
@@ -281,8 +285,8 @@ length(dfP1$M2ID)
 dfP1$pwb2 = varScore(dfP1, Forward = PWB2, MaxMiss = .0)
 
 # Miscellaneous
-P1miscO = c('B1PBYEAR','B1PRSEX','B1PF7A', 'pwb2')
-P1misc = c('birth_year','P1_sex','P1_race', 'pwb2')
+P1miscO = c('B1PBYEAR','B1PRSEX','B1PF7A', 'B1PF2A', 'pwb2')
+P1misc = c('birth_year','P1_sex','P1_race', 'P1_ethnicity', 'pwb2')
 setnames(dfP1, old=P1miscO, new=P1misc)
 
 P1cols = c("M2ID", P1misc, PWB2, COPE)
@@ -291,14 +295,53 @@ dfP1ss = dfP1[P1cols]
 
 ########################
 
+############################################################
+#### Clean & organize Project 1 (Survey) MILWAUKEE data ####
+############################################################
+
+## MIDUS2 version PWB (7-items per sub-scale)
+PWB2O = c('BASPWBA2', 'BASPWBE2', 'BASPWBG2', 'BASPWBR2', 'BASPWBU2', 'BASPWBS2') # old names
+PWB2 = c('autonomy2', 'envMast2', 'persGrow2', 'posRela2', 'purpLife2', 'selfAcce2') # new names
+
+COPEO = c('BASEMCOP', 'BASPRCOP', 'BASDENIA', 'BASVENT', 'BASDISEN', 'BASREINT', 'BASACTIV', 'BASPLAN') # old names
+COPE = c('COPEem', 'COPEprob', 'COPE_denial', 'COPE_vent', 'COPE_disengage', 'COPE_posReGrow', 'COPE_active', 'COPE_plan') # new names
+
+# Rename columns
+setnames(dfP1M, old=PWB2O, new=PWB2)
+setnames(dfP1M, old=COPEO, new=COPE)
+length(dfP1M$M2ID)
+
+
+
+## Calculate composite PWB
+dfP1M$pwb2 = varScore(dfP1M, Forward = PWB2, MaxMiss = .0)
+
+# Miscellaneous
+P1MmiscO = c( 'BACBYR', 'BACRSEX', 'BACF7A', 'BACF2A', 'pwb2')
+P1Mmisc = c('birth_year', 'P1_sex', 'P1_race', 'P1_ethnicity', 'pwb2')
+setnames(dfP1M, old=P1MmiscO, new=P1Mmisc)
+
+P1Mcols = c("M2ID", P1Mmisc, PWB2, COPE)
+# Subset P1 data
+dfP1Mss = dfP1M[P1Mcols]
+
+
+varDescribe(dfP1Mss)
+varDescribe(dfP1ss)
+summary(duplicated(c(dfP1ss$M2ID, dfP1Mss$M2ID)))
+
+#### Merge P1 and P1 Milwaukee ####
+dfP1_P1M = rbind(dfP1ss, dfP1Mss)
+varDescribe(dfP1_P1M)
+########################
+
 #####################
 ####  Merge data #### 
 #####################
-dfTemp = merge.data.frame(dfP4ss2, dfP1ss, by='M2ID', all=TRUE)
-names(dfTemp)
+dfTemp = merge.data.frame(dfP1_P1M, dfP4ss2,  by='M2ID', all=TRUE)
+
 
 df = dfTemp
-
 ################################
 ### Convert to long format  #### 
 ################################
@@ -308,7 +351,7 @@ df = dfTemp
 dt = df
 # All variables except stress[1-6], hr[1-6], ecgQ[1-6]
 
-varsid = c(names(dt[1:12]), names(dt[31:50]))
+varsid = c(names(dt[1:16]), names(dt[35:55]))
 dfLTemp = melt.data.table(setDT(dt),
                        id.vars = varsid, # ID variables - all the variables to keep but not split apart on
                        measure = patterns("^stress", "^hr", "^ecgQ"),
@@ -372,15 +415,15 @@ Anova(lmerS, type=3, test="F")
 modelSummary(lmerS)
 # The slopes
 slopes = coef(lmerS)$M2ID
-names(slopes)
-slopes
+#names(slopes)
+#slopes
 dfSlope = data.frame(slopes)
-names(dfSlope)
-dfSlope$stress_CMC
-rownames(dfSlope)
+#names(dfSlope)
+#dfSlope$stress_CMC
+#rownames(dfSlope)
 
 dfSlope2 = data.frame(M2ID = row.names(dfSlope), dfSlope$stress_CMC)
-dfSlope2
+#dfSlope2
 names(dfSlope2)[names(dfSlope2) == 'dfSlope.stress_CMC'] = 'coherence_slope'
 dfL = merge.data.frame(dfL, dfSlope2, by='M2ID', all=TRUE)
 
@@ -408,8 +451,8 @@ write.csv(dfL, file=fpathL)
 
 
 #### Read in data in future without all that trouble #### 
-df = read.csv(fpathW)
-dfL = read.csv(fpathL)
+#df = read.csv(fpathW)
+#dfL = read.csv(fpathL)
 
 
 
@@ -438,25 +481,63 @@ ggplot(dfL, aes(stress, hr, color=as.factor(M2ID)))+
 ####   LMER analysis   #### 
 ###########################
 
-#### Save a separate file for analysis - excluding the many survey people without coherence data
+#### Create a separate dataframe for analysis - excluding the many survey/P1 people without biomarker/P4/coherence data
 dfLs = dfL[!is.na(dfL$coherence_slope),]
-length(unique(dfLs$M2ID))
-varDescribeBy(dfLs$coherence_slope, dfLs$SAMPLMAJ)
-View(dfLs)
-
-dfLc = dfL[dfL$complete == 1,]
-length(unique(dfLc$M2ID))
-varDescribeBy(dfL$M2ID, dfL$stress)
+length(unique(dfLs$M2ID)) # 1065
 
 
-today = '20180116'
-fnameL = paste("cohLong_",today,".csv",sep='')
-fpathL = paste(ddir,"/",fnameL, sep='')
-write.csv(dfL, file=fpathL)
+#### Demographics ####
 
-#### Demographics table ####
-varDescribeBy(dfLs$M2ID)
 # Move long data back to wide format
+dfLsW = reshape(dfLs, idvar = "M2ID", v.names=c('hr', 'stress', 'stress_CMC', 'ecgQ'), drop=c('X', 'stressMC'), timevar = "timepoint", direction = "wide")
+
+names(dfLsW)
+
+summary(dfLsW$P1_sex) # NA = 182
+summary(dfLsW$gender) # Male = 455, Female = 610
+
+varDescribe(dfLsW$P4_age) # M = 56.4, SD = 11.21, range = 35-86
+varDescribe(dfLsW$P1_PIage) # M = 53.55, SD = 11.4, range = 34-83
+varDescribe(dfLsW$months_P1SAQ_to_P4) # M = 25.89, SD = 14.19, range = 0-62
+varDescribe(dfLsW$months_P1PI_to_P4) # M = 28.4, SD = 13.93, range = 5-63
+varDescribe(dfLsW$months_P1cog_to_P4) # M = 23.62, SD = 12.64, range = 1-61 (N = 973)
+varDescribe(dfLsW$pwb2) # N = 883
+varDescribe(dfLsW$P4_STAItrait) # N = 1057
+varDescribe(dfLsW$P4_CESD) # N = 1057
+varDescribe(dfLsW$IL6) # N = 1058
+varDescribe(dfLsW$CRP) # N = 1052
+varDescribe(dfLsW$COPEem) # N = 882
+varDescribe(dfLsW$COPEprob) # N = 881
+varDescribeBy(dfLsW$pwb2, dfLsW$SAMPLMAJ) # missing milwaukee subsample 
+
+summary(dfLsW$P1_race) # Asian = 3, black = 23, DK = 1, Native american or alaska native aleutian islander/eskimo = 11, other = 25, white = 819, NA = 182
+summary(dfLsW$P1_ethnicity)
+
+summary(dfLsW$SAMPLMAJ) # main = 521, Sibling = 6, twin = 337, city oversample = 19, milwaukee=182
+
+varDescribe(unique(dfLsW$M2FAMNUM)) # 758 unique families 
+summary(duplicated(dfLsW$M2FAMNUM))
+varDescribe(dfLsW$M2FAMNUM[dfLsW$SAMPLMAJ == '(03) TWIN']) # 337 twins
+varDescribe(unique(dfLsW$M2FAMNUM[dfLsW$SAMPLMAJ == '(03) TWIN'])) # 218 unique family ids that are twins. so 337 subjects are twins - 218 twins without their sib = 119
+varDescribe(rle(dfLsW$M2FAMNUM[dfLsW$SAMPLMAJ == '(03) TWIN']))
+summary(duplicated(dfLsW$M2FAMNUM[dfLsW$SAMPLMAJ == '(03) TWIN'])) # 119 are duplicated, 218 are not. Why is 119 odd?
+# count up the number of subjects with each family id, each subject's value for sibs column is how many people have same family id (including themself)
+dfLsW$sibs = NA
+for (family in dfLsW$M2FAMNUM ) {
+  print(family)
+  numsibs = varDescribe(dfLsW$M2ID[dfLsW$M2FAMNUM == family])$n
+  dfLsW$sibs[dfLsW$M2FAMNUM == family] = numsibs
+}
+View(dfLsW[dfLsW$SAMPLMAJ == ''])
+# 1 family with 2 twin pairs, 1 family with 3 siblings, 119 - 4- 3 = 112/2 = 56 twin pairs (58 familes with replicas)
+varDescribe(unique( dfLsW$M2FAMNUM[ (dfLsW$SAMPLMAJ == '(03) TWIN') & (dfLsW$sibs == 1) ] )) # 101 without their sib, 117 pairs (2 in 1 family)
+
+
+sort(dfLsW$M2FAMNUM[dfLsW$SAMPLMAJ == '(02) SIBLING']) # 6 total. 5 unique, which means only 1 pair 
+
+varDescribe(unique(dfLsW$M2FAMNUM[dfLsW$SAMPLMAJ == '(02) SIBLING'])) # 5 unique family ids that are siblings, 1 pair of siblings 
+varDescribeBy(as.numeric(dfLsW$SAMPLMAJ), dfLsW$M2FAMNUM)
+
 
 
 
