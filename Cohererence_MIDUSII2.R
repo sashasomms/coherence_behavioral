@@ -57,7 +57,6 @@ varDescribe(dfP1M)
 PZfile = paste(myddir, '/zygoSibs.sav', sep='')
 dfPZ = read.spss(PZfile, to.data.frame=TRUE)
 names(dfPZ)
-summary(dfPZ$SAMPLMAJ)
 length(dfPZ$M2ID)
 
 
@@ -143,9 +142,9 @@ count(is.na(dfP4$hr5)) # 179 - 136 = 43
 count(is.na(dfP4$hr6)) # 194 - 151 = 43
 
 #### Clean diabetes data ####
-dfP4$P4_diabetes = varRecode(dfP4$P4_diabetes, c("(1) YES", "(2) NO", "(3) BORDERLINE"), c(1, 3, 2)) # 1 = diabetic, 2 = borderline diabetic, 3 = not diabetic
+dfP4$P4_diabetes = varRecode(dfP4$P4_diabetes, c("(1) YES", "(2) NO", "(3) BORDERLINE"), c(3, 1, 2)) # 1 = not diabetic, 2 = borderline diabetic, 3 = diabetic
 dfP4$P4_diabetes = as.numeric(dfP4$P4_diabetes)
-varDescribe(dfP4$P4_diabetes)
+varDescribeBy(dfP4$M2ID, dfP4$P4_diabetes)
 
 #### Score BMI data ####
 # Underweight: BMI is less than 18.5
@@ -341,8 +340,9 @@ varDescribe(dfP1_P1M)
 #####################
 ####  Merge data #### 
 #####################
-# Merge zyogsity and twins data 
+# Merge zyogsity and twins data to P1 data
 dfTemp2 = merge.data.frame(dfP1_P1M, dfPZ,  by='M2ID', all=TRUE)
+# Merge that zygosity/twins & P1 data to P4 data
 dfTemp = merge.data.frame(dfTemp2, dfP4ss2,  by='M2ID', all=TRUE)
 
 
@@ -352,7 +352,8 @@ df = dfTemp
 ####  Create a M2FAMNUM for MKE subjects #### 
 ############################################
 # MKE subjects don't have a FAMNUM assigned, but none were related. 
-# Give each MKE subsample subject a unique M2FAMNUM for analyses.
+# Give each MKE subject a unique M2FAMNUM for analyses.
+# Start numbering at 130000
 famnum = 130000
 for ( mke in df$M2ID[df$SAMPLMAJ == '(13) MILWAUKEE'] ) {
   if ( !is.na(mke) ) {
@@ -424,7 +425,7 @@ for ( s in unique(dfL$M2ID) ) {
   rm(cS, cH, stressNotNA, hrNotNA) # clear variables before looping for next subject
 }
 
-length(completeSubjs)
+length(completeSubjs) # 968
 
 ##################################
 #### Extract slopes from LMEM ####
@@ -446,14 +447,17 @@ dfSlope = data.frame(slopes)
 dfSlope2 = data.frame(M2ID = row.names(dfSlope), dfSlope$stress_CMC)
 #dfSlope2
 names(dfSlope2)[names(dfSlope2) == 'dfSlope.stress_CMC'] = 'coherence_slope'
+# Merge slopes into long format dataframe
 dfL = merge.data.frame(dfL, dfSlope2, by='M2ID', all=TRUE)
-
+# Merge slopes into wide format dataframe
+df = merge.data.frame(df, dfSlope2, by='M2ID', all=TRUE)
+varDescribe(df$coherence_slope)
 
 ################################
 #### Write out my data file #### 
 ################################
 
-today='20180126'
+today='20180207'
 
 # Wide format
 fnameW = paste("coh_",today,".csv",sep='')
@@ -472,8 +476,8 @@ write.csv(dfL, file=fpathL)
 
 
 #### Read in data in future without all that trouble #### 
-#df = read.csv(fpathW)
-#dfL = read.csv(fpathL)
+df = read.csv(fpathW)
+dfL = read.csv(fpathL)
 
 
 
@@ -494,7 +498,7 @@ ggplot(dfL, aes(stress, hr, color=as.factor(M2ID)))+
   labs(x="Self-Reported Stress", y="Heart Rate")+
   theme(legend.position="none")
 
-
+## Would be cool to make this a heat map where color is the magnitude of the slope 
 
 
 
@@ -513,9 +517,8 @@ dfLsW = reshape(dfLs, idvar = "M2ID", v.names=c('hr', 'stress', 'stress_CMC', 'e
 
 names(dfLsW)
 
-summary(dfLsW$P1_sex) # NA = 182
 summary(dfLsW$gender) # Male = 455, Female = 610
-varDescribe(dfLsW$months_P1SAQ_to_P4)
+varDescribe(dfLsW$months_P1SAQ_to_P4) # M = 25.89, SD = 14.19, range = 0 - 62
 
 varDescribe(dfLsW$P4_age) # M = 56.4, SD = 11.21, range = 35-86
 varDescribe(dfLsW$P1_PIage) # M = 53.55, SD = 11.4, range = 34-83
@@ -548,7 +551,6 @@ for (family in n_occur$Var1[n_occur$Freq > 1] ) {
   numsibs = n_occur$Freq[n_occur$Var1 == family ]
   dfLsW$sibs[dfLsW$M2FAMNUM == family] = numsibs
 }
-View(dfLsW[dfLsW$SAMPLMAJ == '(03) TWIN',])
 length(dfLsW$M2ID[dfLsW$SAMPLMAJ == '(03) TWIN' & dfLsW$sibs == 2 & dfLsW$ZYGCAT == 'MONOZYGOTIC']) # 128
 length(dfLsW$M2ID[dfLsW$SAMPLMAJ == '(03) TWIN' & dfLsW$sibs == 2 & dfLsW$ZYGCAT == 'DIZYGOTIC - SAME SEX']) # 56
 length(dfLsW$M2ID[dfLsW$SAMPLMAJ == '(03) TWIN' & dfLsW$sibs == 2 & dfLsW$ZYGCAT == 'DIZYGOTIC - DIFFERENT SEX']) # 46
@@ -562,18 +564,13 @@ View(dfLsW[dfLsW$SAMPLMAJ != '(03) TWIN',])
 length(dfLsW$M2ID[dfLsW$SAMPLMAJ != '(03) TWIN' & dfLsW$sibs == 3]) # N = 3 (1 family)
 length(dfLsW$M2ID[dfLsW$SAMPLMAJ != '(03) TWIN' & dfLsW$sibs == 2]) # N = 8 (4 families)
 
-View(dfLsW[dfLsW$SAMPLMAJ == '(02) SIBLING',]) # 6 total. 5 unique, which means only 1 pair 
-
 varDescribe(unique(dfLsW$M2FAMNUM[dfLsW$SAMPLMAJ == '(02) SIBLING'])) # 5 unique family ids that are siblings, 1 pair of siblings 
-varDescribeBy(as.numeric(dfLsW$SAMPLMAJ), dfLsW$M2FAMNUM)
-
-
 
 
 #### Prep variables ####
-# Have age for everyone 
+# Have age for everyone (so don't need to recenter well-being variable)
 # Stress is centered within cluster (centered around each subject's mean)
-# Thus: for each analysis, just need to re-center age based on that sample 
+# Thus: for each analysis, just need to re-center age based on who has that well-being variable
 # For mediation, will need to re-center based on who has complete COPE data AND the outcome var
 
 ## Cluster Mean Center Stress ##
@@ -593,7 +590,7 @@ dfLs$COPEem_C = dfLs$COPEem - mean(dfLs$COPEem, na.rm=T)
 ## Re-code ##
 dfLs$gender_C = varRecode(dfLs$gender, c('(1) MALE', '(2) FEMALE'), c(-.5,.5))
 
-## Log transform inflammatory markers
+## Log transform inflammatory markers for normal distribution 
 dfLs$IL6_T = log2(dfLs$IL6)
 hist(dfLs$IL6_T)
 dfLs$CRP_T = log(dfLs$CRP, base=10)
@@ -639,6 +636,7 @@ Anova(lmerM, type=3, test="F")
 modelSummary(lmerM)
 # b = 4.217e-03, F(1, 840.3) = 1.947e+01, p < .0001 (1.16e-05)
 # b = .004217, F(1, 840.3) = 19.47, p < .0001 (p = .0000116)
+# SE = 9.555e-04 = .00096
 
 #### Depression ####
 # Center age for subjects in this analysis 
@@ -651,7 +649,7 @@ Anova(lmerM, type=3, test="F")
 modelSummary(lmerM)
 # b = -0.022, F(1, 807.4) = 28.628, p < .0001 (1.14e-07)
 # b = -0.022, F(1, 807.4) = 28.628, p < .0001 (p = .000000114)
-
+# SE = 0.004061
 
 #### Anxiety ####
 # Center age for subjects in this analysis 
@@ -662,8 +660,9 @@ dfLs$P4_age_C = dfLs$P4_age - mean(dfLs$P4_age[!is.na(dfLs$P4_STAItrait_C)], na.
 lmerM = lmer(hr ~ stress_CMC * P4_STAItrait_C + P4_age_C + (1 + stress_CMC|M2ID) + (1|M2FAMNUM), data=dfLs)
 Anova(lmerM, type=3, test="F")
 modelSummary(lmerM)
-# b = -0.018, f(1, 793.5) = 2.523e+01, p < .0001 (6.29e-07)
-# b = -0.018, f(1, 793.5) = 25.23, p < .0001 (p = .000000629)
+# b = -0.018, F(1, 793.5) = 2.523e+01, p < .0001 (6.29e-07)
+# b = -0.018, F(1, 793.5) = 25.23, p < .0001 (p = .000000629)
+# SE = 0.003656
 
 #### IL6 ####
 # Center age for subjects in this analysis 
@@ -676,6 +675,7 @@ Anova(lmerM, type=3, test="F")
 modelSummary(lmerM)
 # b = -0.155, F(1, 802.8) = 25.49, p < .0001 (5.5e-07)
 # b = -0.155, F(1, 802.8) = 25.49, p < .0001 (p = .00000055)
+# SE = 0.03066
 
 #### CRP ####
 # Center age for subjects in this analysis 
@@ -687,6 +687,8 @@ lmerM = lmer(hr ~ stress_CMC * CRP_T_C + P4_age_C + (1 + stress_CMC|M2ID) + (1|M
 Anova(lmerM, type=3, test="F")
 modelSummary(lmerM)
 # b = -0.166, F(1, 857.0) = 6.394, p = .0116
+# SE = 0.06568
+
 
 #### Diabetes ####
 # Center age for subjects in this analysis 
@@ -697,8 +699,8 @@ dfLs$P4_age_C = dfLs$P4_age - mean(dfLs$P4_age[!is.na(dfLs$P4_diabetes)], na.rm=
 lmerM = lmer(hr ~ stress_CMC * P4_diabetes + P4_age_C + (1 + stress_CMC|M2ID) + (1|M2FAMNUM), data=dfLs)
 Anova(lmerM, type=3, test="F")
 modelSummary(lmerM)
-# b = .120, F(1, 812.9) = 5.673, p = .017
-
+# b = -.120, F(1, 812.9) = 5.673, p = .0175
+# SE = 0.05035
 
 #### BMI ####
 # Center age for subjects in this analysis 
@@ -710,7 +712,8 @@ lmerM = lmer(hr ~ stress_CMC * P4_BMI + P4_age_C + (1 + stress_CMC|M2ID) + (1|M2
 Anova(lmerM, type=3, test="F")
 modelSummary(lmerM)
 # With <18.5: b = -0.011, F(1, 824.4) = 5.112, p = .024
-# without <18.5: b = -0.011, F(1, 822.1) = 5.2776, p = .0219
+# Without <18.5: b = -0.012, F(1, 822.1) = 5.2776, p = .0219
+# SE = 0.005041
 
 #### Emotion-focused coping ####
 # Center age for subjects in this analysis 
@@ -737,51 +740,97 @@ modelSummary(lmerM)
 
 
 #### MEDIATION -LMEM ####
-### 2. Coherence -> COPE 
-## Problem-focused coping
-lmerM = lmer(hr ~ stress_CMC * COPEprob_C + P4_age_C + (1+ stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
-Anova(lmerM, type=3, test="F")
-modelSummary(lmerM)
-# b = .009, F(1, 721.56) = 1.826, p = .177
+#### mLMEM. PWB ####
+# New dataframe for analysis subsample (complete data on all variables involved in each mediation)
+dfM = dfLsW[!is.na(dfLsW$pwb2) & !is.na(dfLsW$COPEem),]
+### CENTER FOR ANALYSIS SUBSAMPLE
+# Age
+dfM$P4_age_C = dfM$P4_age - mean(dfM$P4_age, na.rm=T)
+# COPE
+dfM$COPEem_C = dfM$COPEem - mean(dfM$COPEem, na.rm=T)
+# WB
+dfM$pwb2_C = dfM$pwb2 - mean(dfM$pwb2, na.rm=T)
+# Coherence slope
+dfM$coherence_slope_C = dfM$coherence_slope - mean(dfM$coherence_slope, na.rm=T)
 
-# Slope extracted
-lmerM = lmer(COPEprob ~ coherence_slopeNoP4_age_C + P4_age_C + (1|M2FAMNUM), data=df)
-Anova(lmerM, type=3, test="F")
-modelSummary(lmerM)
-# b = .72, F(1,870.4) = 3.24, p = .072
-
-## Emotion-focused coping
-lmerM = lmer(hr ~ stress_CMC * COPEem_C + P4_age_C + (1+ stress_CMC|M2ID) + (1|M2FAMNUM), data=dfL)
-Anova(lmerM, type=3, test="F")
-modelSummary(lmerM)
-# b = -0.033, F(1, 735.51) = 22.204, p < .0001
-
-## Slope extracted
-lmerM = lmer(COPEem ~ coherence_slopeNoP4_age_C + P4_age_C + (1|M2FAMNUM), data=df)
-Anova(lmerM, type=3, test="F")
-modelSummary(lmerM)
-# b = -1.61, F(1, 878.38) = 20.84, p < .0001
-
-
-#### mLMEM. Depression ####
-lmerM1 = lmer(COPEem ~ coherence_slopeNoP4_age_C + P4_age_C + (1|M2FAMNUM), data=df[df$P4_CESD != 'NA',])
+### 1. Coherence -> WB (direct path)
+lmerM1 = lmer(pwb2 ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
 Anova(lmerM1, type=3, test="F")
 modelSummary(lmerM1)
+# b = 11.52, F(1, 1051.3) = 28.17, p = 1.36e-07 = .000000136
+# b = 11.52, F(1, 1051.3) = 28.17, p < .0001
+# SE = 2.16610
 
-lmerM2 = lmer(P4_CESD ~ coherence_slopeNoP4_age_C + P4_age_C + (1|M2FAMNUM), data=df[df$COPEem_C != 'NA',])
+### 2. Coherence -> COPE (mediator)
+lmerM2 = lmer(COPEem ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
 Anova(lmerM2, type=3, test="F")
 modelSummary(lmerM2)
+# b = -1.79052, F(1, 1051.1) = 26.809, p = 2.69e-07 = .000000269
+# b = -1.79, F(1, 1051.1) = 26.81, p < .0001 
+# SE = 0.01541 
 
-lmerM3 = lmer(P4_CESD ~ coherence_slopeNoP4_age_C + COPEem_C + P4_age_C + (1|M2FAMNUM), data=df)
+### 3. Coherence -> WB controlling for COPE (mediator)
+lmerM3 = lmer(pwb2 ~ P4_age_C + coherence_slope_C + COPEem_C + (1|M2FAMNUM), data=dfM)
 Anova(lmerM3, type=3, test="F")
 modelSummary(lmerM3)
-# coherence: b = -1.75, F(1,874.98) = 12.278, p = .0005
-# emotion coping: b = .39, F(1, 874.76) = 68.27, p < .0001
+# Coherence: b = 6.88616, F(1, 1052.8) = 11.84, p = .000601 # SE = 1.99664
+# Coherence: b = 6.89, F(1, 1052.8) = 11.84, p < .001
 
-med = mediate(lmerM2, lmerM3, treat = "coherence_slopeNoP4_age_C", mediator = "COPEem_C")
-summary(med)
+# COPEem : b = -2.61036, F(1, 1052.6) = 219.36, p <2.2e-16 # SE = 0.17594
+# COPEem : b = -2.61, F(1, 1052.6) = 219.36, p < .0001
 
+### 4. Indirect significant? 
+med_pwb2 = mediate(lmerM2, lmerM3, treat = "coherence_slope_C", mediator = "COPEem_C")
+summary(med_pwb2)
+# ACME/indirect: 4.728, CI = 2.943 - 6.680
+# ADE/direct:  6.823, CI = 2.869 - 10.963
+# % mediated: 41.1%
 
+#### mLMEM. Depression ####
+# New dataframe for analysis subsample (complete data on all variables involved in each mediation)
+dfM = dfLsW[!is.na(dfLsW$P4_CESD) & !is.na(dfLsW$COPEem),]
+### CENTER FOR ANALYSIS SUBSAMPLE
+# Age
+dfM$P4_age_C = dfM$P4_age - mean(dfM$P4_age, na.rm=T)
+# COPE
+dfM$COPEem_C = dfM$COPEem - mean(dfM$COPEem, na.rm=T)
+# WB
+dfM$P4_CESD_C = dfM$P4_CESD - mean(dfM$P4_CESD, na.rm=T)
+# Coherence slope
+dfM$coherence_slope_C = dfM$coherence_slope - mean(dfM$coherence_slope, na.rm=T)
+
+### 1. Coherence -> WB (direct path)
+lmerM1 = lmer(P4_CESD ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM1, type=3, test="F")
+modelSummary(lmerM1)
+# b = 
+# b = 
+# SE = 
+
+### 2. Coherence -> COPE (mediator)
+lmerM2 = lmer(COPEem ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM2, type=3, test="F")
+modelSummary(lmerM2)
+# b = 
+# b =
+# SE = 
+
+### 3. Coherence -> WB controlling for COPE (mediator)
+lmerM3 = lmer(P4_CESD ~ P4_age_C + coherence_slope_C + COPEem_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM3, type=3, test="F")
+modelSummary(lmerM3)
+# Coherence: b = 
+# Coherence:
+
+# COPEem : 
+# COPEem :
+
+### 4. Indirect significant? 
+med_P4_CESD = mediate(lmerM2, lmerM3, treat = "coherence_slope_C", mediator = "COPEem_C")
+summary(med_P4_CESD)
+# ACME/indirect: 
+# ADE/direct: 
+# % mediated: 
 
 
 #### mLMEM. Anxiety ####
