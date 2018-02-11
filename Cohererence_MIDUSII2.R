@@ -498,8 +498,28 @@ ggplot(dfL, aes(stress, hr, color=as.factor(M2ID)))+
   labs(x="Self-Reported Stress", y="Heart Rate")+
   theme(legend.position="none")
 
-## Would be cool to make this a heat map where color is the magnitude of the slope 
+## Make with heat map where color is the magnitude of the slope 
+mycol = c("#0710C4", "gray",# negative & zero
+           "#FFEC00", "#FFC300", "#FF5733", "#C70039", "#900C3F", "#581845")   # positive
+mybreaks = c(-.4, 0, 
+             .5, 1, 1.5, 2, 3, 4)
 
+ggplot(dfL, aes(stress, hr, color=coherence_slope))+
+  geom_smooth(aes(group=as.factor(M2ID)),method="lm",se=F,size=.1, alpha=.6, position="jitter")+
+  xlim(c(0,11))+
+  theme_bw() +
+  theme(panel.grid.minor = element_blank(), axis.text=element_text(size=14), axis.title=element_text(size=24)) +
+  labs(x="Self-Reported Stress", y="Heart Rate")+
+  scale_colour_gradientn("Slope",colours=mycol, limits=c(-.4, 4.5), values = scales::rescale(c(-0.5, -0.05, 0, 0.05, 0.5,1,2,3,4)), breaks = mybreaks, guide="colourbar")
+
+#### Histogram of coherence slopes ####
+ggplot(dfLsW, aes(coherence_slope)) +
+  geom_histogram(aes(fill=as.factor(coherence_slope)), binwidth=.2, col="black", fill="#FFC300") +
+  #scale_fill_gradientn("Slope", colours=mycol, limits=c(-.4, 4.5), values = scales::rescale(c(-0.5, -0.05, 0, 0.05, 0.5,1,2,3,4)), breaks = mybreaks, guide="colourbar")+
+  labs(x="Slope", y="Number of Subjects") +
+  theme_bw() +
+  theme(panel.grid.minor = element_blank(), axis.text=element_text(size=12), axis.title=element_text(size=24)) +
+  theme(legend.position="none")
 
 
 ###########################
@@ -525,13 +545,15 @@ varDescribe(dfLsW$P1_PIage) # M = 53.55, SD = 11.4, range = 34-83
 varDescribe(dfLsW$months_P1SAQ_to_P4) # M = 25.89, SD = 14.19, range = 0-62
 varDescribe(dfLsW$months_P1PI_to_P4) # M = 28.4, SD = 13.93, range = 5-63
 varDescribe(dfLsW$months_P1cog_to_P4) # M = 23.62, SD = 12.64, range = 1-61 (N = 973)
-varDescribe(dfLsW$pwb2) # N = 883 NOW 1061
-varDescribe(dfLsW$P4_STAItrait) # N = 1057
-varDescribe(dfLsW$P4_CESD) # N = 1057
-varDescribe(dfLsW$IL6) # N = 1058
-varDescribe(dfLsW$CRP) # N = 1052
-varDescribe(dfLsW$COPEem) # N = 882 NOW 1060
-varDescribe(dfLsW$COPEprob) # N = 881 NOW 1059
+varDescribe(dfLsW$pwb2) # N = 1061, M = 232.81 (35.25)
+varDescribe(dfLsW$P4_CESD) # N = 1057, M = 8.61 (8.1)
+varDescribe(dfLsW$P4_STAItrait) # N = 1057, M = 34.2 (8.98)
+varDescribe(dfLsW$IL6) # N = 1058, M = 2.96 (2.89)
+varDescribe(dfLsW$CRP) # N = 1052, M = 2.85 (4.26)
+varDescribeBy(dfLsW$M2ID, dfLsW$P4_diabetes) # N = 1063, M = 1.25 (.66). 1 = 929, 2 = 2, 3 = 132
+varDescribe(dfLsW$P4_BMI) # N = 1062, M = 29.83 (6.63)
+varDescribe(dfLsW$COPEem) # N = 1060, M = 22.28 (5.51)
+varDescribe(dfLsW$COPEprob) # N = 1059, M = 38.05 (5.94)
 
 summary(dfLsW$P1_race) # Asian = 3, black = 193, Native american or alaska native aleutian islander/eskimo = 14, other = 27, white = 825, DK = 1, REFUSED =1, NA=1
 summary(dfLsW$P1_ethnicity)
@@ -715,6 +737,7 @@ modelSummary(lmerM)
 # Without <18.5: b = -0.012, F(1, 822.1) = 5.2776, p = .0219
 # SE = 0.005041
 
+
 #### Emotion-focused coping ####
 # Center age for subjects in this analysis 
 varDescribe(dfLs$COPEem_C)
@@ -739,21 +762,61 @@ modelSummary(lmerM)
 # b = .009, F(1, 833.6) = 2.881, p = .090
 
 
+#### All-Together Now ####
+dfA = dfLsW
+## Mean Center ##
+dfA$P4_age_C = dfA$P4_age - mean(dfA$P4_age, na.rm=T)
+
+dfA$pwb2_C = dfA$pwb2 - mean(dfA$pwb2, na.rm=T)
+dfA$P4_CESD_C = dfA$P4_CESD- mean(dfA$P4_CESD, na.rm=T)
+dfA$P4_STAItrait_C = dfA$P4_STAItrait - mean(dfA$P4_STAItrait, na.rm=T)
+dfA$IL6_C = dfA$IL6 - mean(dfA$IL6, na.rm=T)
+dfA$CRP_C = dfA$CRP - mean(dfA$CRP, na.rm=T)
+dfA$COPEprob_C = dfA$COPEprob - mean(dfA$COPEprob, na.rm=T)
+dfA$COPEem_C = dfA$COPEem - mean(dfA$COPEem, na.rm=T)
+
+## Re-code ##
+dfA$gender_C = varRecode(dfA$gender, c('(1) MALE', '(2) FEMALE'), c(-.5,.5))
+
+## Log transform inflammatory markers for normal distribution 
+dfA$IL6_T = log2(dfA$IL6)
+hist(dfA$IL6_T)
+dfA$CRP_T = log(dfA$CRP, base=10)
+hist(dfA$CRP_T)
+# then center the transformed versions
+dfA$IL6_T_C = dfA$IL6_T - mean(dfA$IL6_T, na.rm=T)
+dfA$CRP_T_C = dfA$CRP_T - mean(dfA$CRP_T, na.rm=T)
+
+# Psych
+lmerM = lmer(coherence_slope ~ P4_age_C + pwb2_C + P4_CESD_C + P4_STAItrait_C + (1|M2FAMNUM), data=dfA)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+
+# Physical
+lmerM = lmer(coherence_slope ~ P4_age_C + IL6_T_C + CRP_T_C + P4_BMI + P4_diabetes + (1|M2FAMNUM), data=dfA)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+
+# Literally everything
+lmerM = lmer(coherence_slope ~ P4_age_C + COPEem_C + pwb2_C + P4_CESD_C + P4_STAItrait_C + IL6_T_C + CRP_T_C + P4_BMI + P4_diabetes + (1|M2FAMNUM), data=dfA)
+Anova(lmerM, type=3, test="F")
+modelSummary(lmerM)
+
+
 #### MEDIATION -LMEM ####
 #### mLMEM. PWB ####
 # New dataframe for analysis subsample (complete data on all variables involved in each mediation)
 dfM = dfLsW[!is.na(dfLsW$pwb2) & !is.na(dfLsW$COPEem),]
+length(dfM$M2ID) # 1057
 ### CENTER FOR ANALYSIS SUBSAMPLE
 # Age
 dfM$P4_age_C = dfM$P4_age - mean(dfM$P4_age, na.rm=T)
 # COPE
 dfM$COPEem_C = dfM$COPEem - mean(dfM$COPEem, na.rm=T)
-# WB
-dfM$pwb2_C = dfM$pwb2 - mean(dfM$pwb2, na.rm=T)
 # Coherence slope
 dfM$coherence_slope_C = dfM$coherence_slope - mean(dfM$coherence_slope, na.rm=T)
 
-### 1. Coherence -> WB (direct path)
+### (total effect/c) 1. Coherence -> WB
 lmerM1 = lmer(pwb2 ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
 Anova(lmerM1, type=3, test="F")
 modelSummary(lmerM1)
@@ -761,7 +824,7 @@ modelSummary(lmerM1)
 # b = 11.52, F(1, 1051.3) = 28.17, p < .0001
 # SE = 2.16610
 
-### 2. Coherence -> COPE (mediator)
+### (path a) 2. Coherence -> COPE (mediator)
 lmerM2 = lmer(COPEem ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
 Anova(lmerM2, type=3, test="F")
 modelSummary(lmerM2)
@@ -773,127 +836,308 @@ modelSummary(lmerM2)
 lmerM3 = lmer(pwb2 ~ P4_age_C + coherence_slope_C + COPEem_C + (1|M2FAMNUM), data=dfM)
 Anova(lmerM3, type=3, test="F")
 modelSummary(lmerM3)
-# Coherence: b = 6.88616, F(1, 1052.8) = 11.84, p = .000601 # SE = 1.99664
+# (direct effect/c') Coherence: b = 6.88616, F(1, 1052.8) = 11.84, p = .000601 # SE = 1.99664
 # Coherence: b = 6.89, F(1, 1052.8) = 11.84, p < .001
 
-# COPEem : b = -2.61036, F(1, 1052.6) = 219.36, p <2.2e-16 # SE = 0.17594
+# (path b) COPEem : b = -2.61036, F(1, 1052.6) = 219.36, p <2.2e-16 # SE = 0.17594
 # COPEem : b = -2.61, F(1, 1052.6) = 219.36, p < .0001
 
 ### 4. Indirect significant? 
 med_pwb2 = mediate(lmerM2, lmerM3, treat = "coherence_slope_C", mediator = "COPEem_C")
 summary(med_pwb2)
-# ACME/indirect: 4.728, CI = 2.943 - 6.680
-# ADE/direct:  6.823, CI = 2.869 - 10.963
+# ACME/indirect: 4.728, CI = 2.943 to 6.680
+# ADE/direct:  6.823, CI = 2.869 to 10.963
 # % mediated: 41.1%
+
+
 
 #### mLMEM. Depression ####
 # New dataframe for analysis subsample (complete data on all variables involved in each mediation)
 dfM = dfLsW[!is.na(dfLsW$P4_CESD) & !is.na(dfLsW$COPEem),]
+length(dfM$M2ID) # 1052
+### CENTER FOR ANALYSIS SUBSAMPLE
+# Age
+dfM$P4_age_C = dfM$P4_age - mean(dfM$P4_age, na.rm=T)
+# COPE
+dfM$COPEem_C = dfM$COPEem - mean(dfM$COPEem, na.rm=T)
+# Coherence slope
+dfM$coherence_slope_C = dfM$coherence_slope - mean(dfM$coherence_slope, na.rm=T)
+
+### (total effect/c) 1. Coherence -> WB 
+lmerM1 = lmer(P4_CESD ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM1, type=3, test="F")
+modelSummary(lmerM1)
+# b = -2.92835, F(1, 1042.8) = 34.18, p = 6.71e-09 = .00000000671
+# b = -2.93, F(1, 1042.8) = 34.18, p < .0001
+# SE = .49972
+
+### (path a) 2. Coherence -> COPE (mediator)
+lmerM2 = lmer(COPEem ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM2, type=3, test="F")
+modelSummary(lmerM2)
+# b = -1.80120, F(1, 1046.5) = 27.525, p = 1.88e-07 = .000000188
+# b = -1.80, F(1, 1046.5) = 27.53, p < .0001
+# SE = .34256
+
+### 3. Coherence -> WB controlling for COPE (mediator)
+lmerM3 = lmer(P4_CESD ~ P4_age_C + coherence_slope_C + COPEem_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM3, type=3, test="F")
+modelSummary(lmerM3)
+# (direct effect/c') Coherence: b = -2.12014, F(1, 1047.8) = 19.28, p = 1.25e-05 = .0000125
+# Coherence: b = -2.12, F(1, 1047.8) = 19.28, p < .0001
+
+# (path b) COPEem : b = .45536, F(1, 1047.7) = 112.49, p < 2e-16
+# COPEem : b = .46, F(1, 1047.7) = 112.49, p < .0001
+
+### 4. Indirect significant? 
+med_P4_CESD = mediate(lmerM2, lmerM3, treat = "coherence_slope_C", mediator = "COPEem_C")
+summary(med_P4_CESD)
+# ACME/indirect: -0.817, CI = -1.176 to -0.498
+# ADE/direct: -2.119, CI = -3.023 to -1.089
+# % mediated: 27.8%
+
+
+
+#### mLMEM. Anxiety ####
+# New dataframe for analysis subsample (complete data on all variables involved in each mediation)
+dfM = dfLsW[!is.na(dfLsW$P4_STAItrait) & !is.na(dfLsW$COPEem),]
+length(dfM$M2ID) # 1052
+### CENTER FOR ANALYSIS SUBSAMPLE
+# Age
+dfM$P4_age_C = dfM$P4_age - mean(dfM$P4_age, na.rm=T)
+# COPE
+dfM$COPEem_C = dfM$COPEem - mean(dfM$COPEem, na.rm=T)
+# Coherence slope
+dfM$coherence_slope_C = dfM$coherence_slope - mean(dfM$coherence_slope, na.rm=T)
+
+### (total effect/c) 1. Coherence -> WB 
+lmerM1 = lmer(P4_STAItrait ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM1, type=3, test="F")
+modelSummary(lmerM1)
+# b = -3.14613, F(1, 1039.7) = 32.52, p = 1.53e-08 = .0000000153
+# b = -3.15, F(1, 1039.7) = 32.52, p < .0001
+# SE = .55038
+
+### (path a) 2. Coherence -> COPE (mediator)
+lmerM2 = lmer(COPEem ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM2, type=3, test="F")
+modelSummary(lmerM2)
+# b = -1.80304, F(1, 1046.6) = 27.578, p = 1.83e-07 = .000000183
+# b = -1.80, F(1, 1046.6) = 27.58, p < .0001
+# SE = .34258
+
+### 3. Coherence -> WB controlling for COPE (mediator)
+lmerM3 = lmer(P4_STAItrait ~ P4_age_C + coherence_slope_C + COPEem_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM3, type=3, test="F")
+modelSummary(lmerM3)
+# (direct effect/c') Coherence: b = -1.94136, F(1, 1047.1) = 14.66, p = .000136
+# Coherence: b = -1.94, F(1, 1047.1) = 14.66, p < .001
+
+# (path b) COPEem : b = .68401, F(1, 1048.0) = 230.23, p < 2e-16
+# COPEem : b = .68, F(1, 1048.0) = 230.23, p < .0001
+
+### 4. Indirect significant? 
+med_P4_STAItrait = mediate(lmerM2, lmerM3, treat = "coherence_slope_C", mediator = "COPEem_C")
+summary(med_P4_STAItrait)
+# ACME/indirect: -1.236, -1.725 to -0.752
+# ADE/direct: -1.956, -2.923 to -1.058
+# % mediated: 38.7%
+
+
+#### mLMEM. IL-6 ####
+# New dataframe for analysis subsample (complete data on all variables involved in each mediation)
+dfM = dfLsW[!is.na(dfLsW$IL6) & !is.na(dfLsW$COPEem),]
+length(dfM$M2ID) # N = 1053
+### CENTER FOR ANALYSIS SUBSAMPLE
+# IL6
+dfM$IL6_T = log2(dfM$IL6)
+hist(dfM$IL6_T)
+# Age
+dfM$P4_age_C = dfM$P4_age - mean(dfM$P4_age, na.rm=T)
+# COPE
+dfM$COPEem_C = dfM$COPEem - mean(dfM$COPEem, na.rm=T)
+# Coherence slope
+dfM$coherence_slope_C = dfM$coherence_slope - mean(dfM$coherence_slope, na.rm=T)
+
+### (total effect/c) 1. Coherence -> WB 
+lmerM1 = lmer(IL6_T ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM1, type=3, test="F")
+modelSummary(lmerM1)
+# b = -0.27484, F(1, 1048.5) = 17.25, p = .0000355
+# b = = -0.27, F(1, 1048.5) = 17.25, p < .0001
+# SE = .06603
+
+### (path a) 2. Coherence -> COPE (mediator)
+lmerM2 = lmer(COPEem ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM2, type=3, test="F")
+modelSummary(lmerM2)
+# b = -1.80737, F(1, 1046.7) = 26.710, p = 2.83e-07
+# b = -1.81, F(1, 1046.7) = 26.71, p < .0001
+# SE = .34892
+
+### 3. Coherence -> WB controlling for COPE (mediator)
+lmerM3 = lmer(IL6_T ~ P4_age_C + coherence_slope_C + COPEem_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM3, type=3, test="F")
+modelSummary(lmerM3)
+# (direct effect/c') Coherence: b = -0.238168, F(1, 1049.0) = 12.77, p = .000368
+# Coherence: b = -0.24, F(1, 1049.0) = 12.77, p < .001
+
+# (path b) COPEem : b = .020752, F(1, 1049.0) = 12.73, p = .000375
+# COPEem : b = .02, F(1, 1049.0) = 12.73, p < .001
+
+### 4. Indirect significant? 
+med_IL6 = mediate(lmerM2, lmerM3, treat = "coherence_slope_C", mediator = "COPEem_C")
+summary(med_IL6)
+# ACME/indirect: -0.0371, CI = -0.0639 to -0.0141
+# ADE/direct: -0.2366, CI = -0.3641 to -0.1064
+# % mediated: 13.62%
+
+
+
+#### mLMEM. CRP ####
+# New dataframe for analysis subsample (complete data on all variables involved in each mediation)
+dfM = dfLsW[!is.na(dfLsW$CRP) & !is.na(dfLsW$COPEem),]
+length(dfM$M2ID) # N = 1047
+### CENTER FOR ANALYSIS SUBSAMPLE
+# CRP
+dfM$CRP_T = log(dfM$CRP, base=10)
+hist(dfM$CRP_T)
+# Age
+dfM$P4_age_C = dfM$P4_age - mean(dfM$P4_age, na.rm=T)
+# COPE
+dfM$COPEem_C = dfM$COPEem - mean(dfM$COPEem, na.rm=T)
+# Coherence slope
+dfM$coherence_slope_C = dfM$coherence_slope - mean(dfM$coherence_slope, na.rm=T)
+
+### (total effect/c) 1. Coherence -> WB 
+lmerM1 = lmer(CRP_T ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM1, type=3, test="F")
+modelSummary(lmerM1)
+# b = -0.0636751, F(1, 1029.9) = 3.9268, p = .0478
+# b = -0.06, F(1, 1029.9) = 3.93, p < .05
+# SE = .0014381
+
+### (path a) 2. Coherence -> COPE (mediator)
+lmerM2 = lmer(COPEem ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM2, type=3, test="F")
+modelSummary(lmerM2)
+# b = -1.76927, F(1, 1040.7) = 25.600, p = 4.96e-07
+# b = -1.77, F(1, 1040.7) = 25.60, p < .0001
+# SE = .34889
+
+### 3. Coherence -> WB controlling for COPE (mediator)
+lmerM3 = lmer(CRP_T ~ P4_age_C + coherence_slope_C + COPEem_C + (1|M2FAMNUM), data=dfM)
+Anova(lmerM3, type=3, test="F")
+modelSummary(lmerM3)
+# (direct effect/c') Coherence: b = -0.0567437, F(1, 1032.1) = 3.0442, p = .0813
+# Coherence: b = -0.06, F(1, 1032.1) = 3.04, p = .08
+
+# (path b) COPEem : b = 0.0038934, F(1, 1041.3) = 1.8635, p  = .1725
+# COPEem : b = .004, F(1, 1041.3) = 1.86, p = .1725
+
+### 4. Indirect significant? 
+med_CRP = mediate(lmerM2, lmerM3, treat = "coherence_slope_C", mediator = "COPEem_C")
+summary(med_CRP)
+# ACME/indirect: b = -0.007073, CI = -0.017934 to 0.003359, p = .16
+# ADE/direct: -0.054810, CI = -0.116582 to 0.004111
+# % mediated: 10.83
+
+
+
+#### mLMEM. BMI ####
+# New dataframe for analysis subsample (complete data on all variables involved in each mediation)
+dfM = dfLsW[!is.na(dfLsW$P4_BMI) & !is.na(dfLsW$COPEem),]
+length(dfM$M2ID) # N = 1057
 ### CENTER FOR ANALYSIS SUBSAMPLE
 # Age
 dfM$P4_age_C = dfM$P4_age - mean(dfM$P4_age, na.rm=T)
 # COPE
 dfM$COPEem_C = dfM$COPEem - mean(dfM$COPEem, na.rm=T)
 # WB
-dfM$P4_CESD_C = dfM$P4_CESD - mean(dfM$P4_CESD, na.rm=T)
+dfM$P4_BMI_C = dfM$P4_BMI - mean(dfM$P4_BMI, na.rm=T)
 # Coherence slope
 dfM$coherence_slope_C = dfM$coherence_slope - mean(dfM$coherence_slope, na.rm=T)
 
-### 1. Coherence -> WB (direct path)
-lmerM1 = lmer(P4_CESD ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
+### (total effect/c) 1. Coherence -> WB 
+lmerM1 = lmer(P4_BMI ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
 Anova(lmerM1, type=3, test="F")
 modelSummary(lmerM1)
-# b = 
-# b = 
-# SE = 
+# b = -0.87913, F(1, 781.3) = 781.3, p = .0244
+# b = -0.88, F(1, 781.3) = 781.3, p < .05
+# SE = .38843
 
-### 2. Coherence -> COPE (mediator)
+### (path a) 2. Coherence -> COPE (mediator)
 lmerM2 = lmer(COPEem ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
 Anova(lmerM2, type=3, test="F")
 modelSummary(lmerM2)
-# b = 
-# b =
-# SE = 
+# b = -1.77760, F(1, 1051.1) = 26.314, p = 3.45e-07
+# b = -1.78, F(1, 1051.1) = 26.31, p < .0001
+# SE = .34576
 
 ### 3. Coherence -> WB controlling for COPE (mediator)
-lmerM3 = lmer(P4_CESD ~ P4_age_C + coherence_slope_C + COPEem_C + (1|M2FAMNUM), data=dfM)
+lmerM3 = lmer(P4_BMI ~ P4_age_C + coherence_slope_C + COPEem_C + (1|M2FAMNUM), data=dfM)
 Anova(lmerM3, type=3, test="F")
 modelSummary(lmerM3)
-# Coherence: b = 
-# Coherence:
+# (direct effect/c') Coherence: b = -0.870530, F(1, 791.3) = 4.837, p = .0281
+# Coherence: b = -0.87, F(1, 791.3) = 4.84, p < .05
 
-# COPEem : 
-# COPEem :
+# (path b) COPEem : b = .004719, F(1, 903.8) = .01774, p = .8941
+# COPEem : b = .0047, F(1, 903.8) = .018, p = .89
 
 ### 4. Indirect significant? 
-med_P4_CESD = mediate(lmerM2, lmerM3, treat = "coherence_slope_C", mediator = "COPEem_C")
-summary(med_P4_CESD)
-# ACME/indirect: 
-# ADE/direct: 
-# % mediated: 
+med_P4_BMI = mediate(lmerM2, lmerM3, treat = "coherence_slope_C", mediator = "COPEem_C")
+summary(med_P4_BMI)
+# ACME/indirect: -0.012, -0.140 to 0.119, p = .86
+# ADE/direct: -0.871, -1.638 to -0.129, p = .02
+# % mediated: 1.3%
 
 
-#### mLMEM. Anxiety ####
-lmerM1 = lmer(COPEem ~ coherence_slopeNoP4_age_C + P4_age_C + (1|M2FAMNUM), data=df[df$P4_STAItrait != 'NA',])
+
+#### mLMEM. Diabetes ####
+# New dataframe for analysis subsample (complete data on all variables involved in each mediation)
+dfM = dfLsW[!is.na(dfLsW$P4_diabetes) & !is.na(dfLsW$COPEem),]
+length(dfM$M2ID) # N = 1058
+### CENTER FOR ANALYSIS SUBSAMPLE
+# Age
+dfM$P4_age_C = dfM$P4_age - mean(dfM$P4_age, na.rm=T)
+# COPE
+dfM$COPEem_C = dfM$COPEem - mean(dfM$COPEem, na.rm=T)
+# Coherence slope
+dfM$coherence_slope_C = dfM$coherence_slope - mean(dfM$coherence_slope, na.rm=T)
+
+### (total effect/c) 1. Coherence -> WB 
+lmerM1 = lmer(P4_diabetes ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
 Anova(lmerM1, type=3, test="F")
 modelSummary(lmerM1)
+# b = -0.061364, F(1, 1043.8) = 2.179, p = .14022
+# b = -0.06, F(1, 1043.8) = 2.18, p = .14
+# SE = .041473
 
-lmerM2 = lmer(P4_STAItrait ~ coherence_slopeNoP4_age_C + P4_age_C + (1|M2FAMNUM), data=df[df$COPEem != 'NA',])
+### (path a) 2. Coherence -> COPE (mediator)
+lmerM2 = lmer(COPEem ~ coherence_slope_C + P4_age_C + (1|M2FAMNUM), data=dfM)
 Anova(lmerM2, type=3, test="F")
 modelSummary(lmerM2)
+# b = -1.80400, F(1, 1050.9) = 27.113, p = 2.31e-07
+# b = -1.80, F(1, 1050.9) = 27.11, p <.0001
+# SE = .34567
 
-lmerM3 = lmer(P4_STAItrait ~ coherence_slopeNoP4_age_C + COPEem_C + P4_age_C + (1|M2FAMNUM), data=df)
+### 3. Coherence -> WB controlling for COPE (mediator)
+lmerM3 = lmer(P4_diabetes ~ P4_age_C + coherence_slope_C + COPEem_C + (1|M2FAMNUM), data=dfM)
 Anova(lmerM3, type=3, test="F")
 modelSummary(lmerM3)
-# coherence: b = -1.66, F(1, 874.60) = 9.51, p = .002
-# emotion coping: b = .69, F(1, 874.86) = 175.65, p < .0001
+# (direct effect/c') Coherence: b = -0.074786, F(1, 1045.2) = 3.163, p = .07562
+# Coherence: b = -0.07,  F(1, 1045.2) = 3.16, p = .08
 
-# Mediation
-med = mediate(lmerM2, lmerM3, treat = "coherence_slopeNoP4_age_C", mediator = "COPEem_C")
-summary(med)
+# (path b) COPEem : b = -0.007400, F(1, 1053.2) = 4.001, p = .04573
+# COPEem : b = -0.01, F(1, 1053.2) = 4.00, p < .05
 
-#### mLMEM. PWB #### 
-lmerM1 = lmer(COPEem ~ coherence_slopeNoP4_age_C + P4_age_C + (1|M2FAMNUM), data=df[df$pwb2 != 'NA',])
-Anova(lmerM1, type=3, test="F")
-modelSummary(lmerM1)
+### 4. Indirect significant? 
+med_P4_diabetes = mediate(lmerM2, lmerM3, treat = "coherence_slope_C", mediator = "COPEem_C")
+summary(med_P4_diabetes)
+# ACME/indirect: .01357, 0.00109 to 0.02778, p = .03
+# ADE/direct: -0.07509, -0.15395 to 0.00459, p = .07
 
-# 1. Coherence -> PWB
-lmerM2 = lmer(pwb2 ~ coherence_slopeNoP4_age_C + P4_age_C + (1|M2FAMNUM), data=df[df$COPEem != 'NA',])
-Anova(lmerM2, type=3, test="F")
-modelSummary(lmerM2)
-hist(dfLs$coherence_slope)
-# 3. COPE + Coherence -> PWB
-lmerM3 = lmer(pwb2 ~ coherence_slopeNoP4_age_C + COPEem_C + P4_age_C + (1|M2FAMNUM), data=df)
-Anova(lmerM3, type=3, test="F")
-modelSummary(lmerM3)
-# coherence: b = 5.31, F(1, 877.98) =  6.31, p = .012
-# emotion coping: b = -2.51, F(1, 877.95) = 158.09, p < .0001
-
-# Mediation
-med = mediate(lmerM2, lmerM3, treat = "coherence_slopeNoP4_age_C", mediator = "COPEem_C")
-summary(med)
-
-#### mLMEM. IL 6 ####
-lmerM1 = lmer(COPEem ~ coherence_slopeNoP4_age_C + P4_age_C + (1|M2FAMNUM), data=df[df$B4BIL6 != 'NA',])
-Anova(lmerM1, type=3, test="F")
-modelSummary(lmerM1)
-
-lmerM2 = lmer(IL6 ~ coherence_slopeNoP4_age_C + P4_age_C + (1|M2FAMNUM), data=df[df$COPEem_C != 'NA',])
-Anova(lmerM2, type=3, test="F")
-modelSummary(lmerM2)
-
-lmerM3 = lmer(IL6 ~ coherence_slopeNoP4_age_C + COPEem_C + P4_age_C + (1|M2FAMNUM), data=df)
-Anova(lmerM3, type=3, test="F")
-modelSummary(lmerM3)
-# coherence: b = -0.45, F(1, 857.34) =  6.02, p = .014
-# emotion coping: b = .04, F(1, 853.81) = 5.82, p = .016
-
-# Mediation
-med = mediate(lmerM2, lmerM3, treat = "coherence_slope_C", mediator = "COPEem_C")
-summary(med)
-
-
-
+# % mediated: -0.18968
 
 
 
