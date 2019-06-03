@@ -7,7 +7,7 @@ in the association between subjective stress and heart rate are related to psych
 Psychological Science. doi:10.1177/0956797619849555
 
 Cite as 
-Sommerfeldt, S. L. (2019). Github Repository, https://github.com/sashasomms/coherence-behavioral
+Sommerfeldt, S. L. (2019). Github Repository, https://github.com/sashasomms/coherence-behavioral. DOI: 10.5281/zenodo.3237927
 
 
 Prep_Coherence_MIDUSII.R 
